@@ -44,6 +44,7 @@ import os.path
 import io
 import subprocess as sp
 import csv
+import tempfile as tp
 import logging
 from contextlib import contextmanager
 from collections import namedtuple
@@ -100,21 +101,23 @@ class Bed6:
         return bed6
 
     def __str__(self):
-        return '\t'.join(self._bed6)
+        return '\t'.join(map(str, self._bed6))
 
 
 def get_fasta(genome_file, bed_file, bedtools_bin='bedtools'):
-    cmd = [bedtools_bin, 'getfasta']
-    cmd += ['-fi', genome_file]
-    cmd += ['-bed', bed_file]
-    cmd += ['-fo', '/dev/stdout']
-    cmd += ['-name', '-s', '-tab']
+    with tp.NamedTemporaryFile(dir='.') as tmp_file:
+        cmd = [bedtools_bin, 'getfasta']
+        cmd += ['-fi', genome_file]
+        cmd += ['-bed', bed_file]
+        cmd += ['-fo', tmp_file.name]
+        cmd += ['-name', '-s', '-tab']
 
-    result = sp.run(cmd, stdout=sp.PIPE, encoding='utf-8')
+        sp.run(cmd)
 
-    for line in result.stdout:
-        name, fa_seq = line.rstrip('\n').split('\t')
-        yield name, fa_seq
+        with open(tmp_file.name) as fa_in:
+            for line in fa_in:
+                name, fa_seq = line.rstrip('\n').split('\t')
+                yield name, fa_seq
 
 
 def create_bwa_index(fasta_file, bwa_bin='bwa'):
@@ -135,7 +138,7 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
     genome_file = os.path.abspath(genome_file)
     out_dir = os.path.abspath(out_dir)
     pseudo_refs_dir = os.path.join(out_dir, 'pseudo_refs')
-    os.makedirs(pseudo_refs_dir)
+    os.makedirs(pseudo_refs_dir, exist_ok=True)
 
     NCL_file = 'NCL_events.tsv'
     NCL_bed = 'NCL_events.near_junction_region.bed'
@@ -176,11 +179,12 @@ def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'NCL_events',
+        type=argparse.FileType('r'),
         help='6-columns TSV: (chr_d, pos_d, strand_d, chr_a, pos_a, strand_a)'
     )
     parser.add_argument(
         'file_list',
-        type=argparse.FileType('r')
+        type=argparse.FileType('r'),
         help=('The file list of samples, consists of 3 columns: '
               '(sample_id, path_to_fastq_1, path_to_fastq_2)')
     )
