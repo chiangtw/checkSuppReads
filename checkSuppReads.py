@@ -198,19 +198,23 @@ def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin='bwa', samt
 
 
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1):
-    os.makedirs(sample_id, exist_ok=True)
+    fastq1 = os.path.abspath(fastq1)
+    fastq2 = os.path.abspath(fastq2)
+    sample_dir = os.path.join(out_dir, sample_id)
 
-    fastq1_dir = os.path.join(sample_id, 'fastq1')
+    os.makedirs(sample_dir, exist_ok=True)
+
+    fastq1_dir = os.path.join(sample_dir, 'fastq1')
     os.makedirs(fastq1_dir, exist_ok=True)
 
-    fastq2_dir = os.path.join(sample_id, 'fastq2')
+    fastq2_dir = os.path.join(sample_dir, 'fastq2')
     os.makedirs(fastq2_dir, exist_ok=True)
 
     with cwd(fastq1_dir):
         bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
 
     with cwd(fastq2_dir):
-        bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)    
+        bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
 
 
 def create_parser():
