@@ -33,7 +33,7 @@ out
  1. generate pseudo-references
  2. create bwa index
  3. bwa mapping
- 4. 
+ 4. filtering
 
 
 """
@@ -135,6 +135,7 @@ def cwd(path):
 
 
 def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
+    logging.info('generating pseudo-references')
     genome_file = os.path.abspath(genome_file)
     out_dir = os.path.abspath(out_dir)
     pseudo_refs_dir = os.path.join(out_dir, 'pseudo_refs')
@@ -172,7 +173,44 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
 
         create_bwa_index(NCL_fasta)
 
-    return pseudo_refs_dir
+    return os.path.join(pseudo_refs_dir, NCL_fasta)
+
+
+def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin='bwa', samtools_bin='samtools'):
+    cmd_1 = [
+        bwa_bin, 'mem',
+        '-t', str(threads),
+        '-O', '100',
+        index_file,
+        fastq_file
+    ]
+
+    cmd_2 = [samtools_bin, 'view', '-Sbh', '-']
+
+    with open(out_file, 'wb') as bam_out:
+        p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
+        p2 = sp.Popen(cmd_2, stdin=p1.stdout, stdout=bam_out)
+
+        p1.wait()
+        p2.wait()
+
+    return out_file
+
+
+def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1):
+    os.makedirs(sample_id, exist_ok=True)
+
+    fastq1_dir = os.path.join(sample_id, 'fastq1')
+    os.makedirs(fastq1_dir, exist_ok=True)
+
+    fastq2_dir = os.path.join(sample_id, 'fastq2')
+    os.makedirs(fastq2_dir, exist_ok=True)
+
+    with cwd(fastq1_dir):
+        bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
+
+    with cwd(fastq2_dir):
+        bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)    
 
 
 def create_parser():
@@ -192,7 +230,7 @@ def create_parser():
     parser.add_argument('--index')
     parser.add_argument('-g', '--genome')
     parser.add_argument('-d', '--dist', type=int, default=100)
-    parser.add_argument('-t', '--threads', type=int)
+    parser.add_argument('-t', '--threads', type=int, default=1)
 
     return parser
 
@@ -203,26 +241,14 @@ if __name__ == "__main__":
 
     os.makedirs(args.out_dir, exist_ok=True)
 
-    reader = csv.reader(args.NCL_events, delimiter='\t')
-    NCL_events = [NCLevent(data) for data in reader]
+    ncl_reader = csv.reader(args.NCL_events, delimiter='\t')
+    NCL_events = [NCLevent(data) for data in ncl_reader]
 
-    ref_dir = args.index
-    if not ref_dir:
-        ref_dir = generate_pseudo_references(NCL_events, args.genome, args.out_dir, args.dist)
+    index_file = args.index
+    if not index_file:
+        index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, args.dist)
 
+    file_reader = csv.reader(args.file_list, delimiter='\t')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    for sample_id, fastq1, fastq2 in file_reader:
+        check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads)
