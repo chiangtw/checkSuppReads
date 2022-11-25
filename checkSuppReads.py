@@ -45,9 +45,12 @@ import io
 import subprocess as sp
 import csv
 import tempfile as tp
+import re
 import logging
 from contextlib import contextmanager
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+from operator import itemgetter
+from itertools import chain
 
 
 logging.basicConfig(
@@ -207,18 +210,18 @@ class CIGAR:
         self._parse()
 
     def _parse(self):
-        parsed_result = re.findall(self._CIGAR_PAT, self._cigar_str)
-        
-        self._cigar_list = [cigar for cigar, _, _ in parsed_result]
-        
-        self._cigar_dict = defaultdict(list)
-        for _, num, op in parsed_result:
-            self._cigar_dict[op].append(int(num))
 
-        logger.debug(self._cigar_str)
-        logger.debug(parsed_result)
-        logger.debug(self._cigar_list)
-        logger.debug(self._cigar_dict)
+        if self._cigar_str == '*':
+            self._cigar_list = []
+            self._cigar_dict = {}
+        else:
+            parsed_result = re.findall(self._CIGAR_PAT, self._cigar_str)
+
+            self._cigar_list = [cigar for cigar, _, _ in parsed_result]
+
+            self._cigar_dict = defaultdict(list)
+            for _, num, op in parsed_result:
+                self._cigar_dict[op].append(int(num))
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -305,14 +308,8 @@ class SamFormat:
 
 def generate_Z3_tag(sam_data):
     ref_consumes_items = itemgetter('M', 'D', 'N', '=', 'X')(sam_data.cigar)
-    logger.debug(ref_consumes_items)
-
     ref_consumes = sum(chain.from_iterable(ref_consumes_items))
-    logger.debug(ref_consumes)
-
     Z3 = sam_data.pos + ref_consumes - 1
-    logger.debug("%d + %d - 1 = %d", sam_data.pos, ref_consumes, Z3)
-
     return "Z3:i:{}".format(Z3)
 
 
@@ -325,22 +322,22 @@ def calc_similarity(cigar, MD):
     return similarity
 
 
-def generate_XS_tag(sam_data):
+def generate_ZS_tag(sam_data):
     similarity = calc_similarity(
         sam_data.cigar,
         sam_data.optional_fields['MD'].value
     )
-    return "XS:f:{}".format(round(similarity, 4))
+    return "ZS:f:{}".format(round(similarity, 4))
 
 
-def append_Z3_XS_tag(bam_file, out_file, samtools_bin='samtools'):
+def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
     cmd_1 = [samtools_bin, 'view', '-h', bam_file]
-    cmd_1 = [samtools_bin, 'view', '-bh', '-']
+    cmd_2 = [samtools_bin, 'view', '-bh', '-']
 
     p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
 
     with open(out_file, 'wb') as bam_out:
-        p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out)
+        p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
 
         for line in iter(p1.stdout.readline, ''):
             sam_data = SamFormat(line)
@@ -352,8 +349,8 @@ def append_Z3_XS_tag(bam_file, out_file, samtools_bin='samtools'):
                     print(sam_data, file=p2.stdin)
                 else:
                     Z3_tag = generate_Z3_tag(sam_data)
-                    XS_tag = generate_XS_tag(sam_data)
-                    print(sam_data, Z3_tag, XS_tag, sep='\t', file=p2.stdin)
+                    ZS_tag = generate_ZS_tag(sam_data)
+                    print(sam_data, Z3_tag, ZS_tag, sep='\t', file=p2.stdin)
 
     return os.path.abspath(out_file)
 
@@ -374,11 +371,11 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
 
     with cwd(fastq1_dir):
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
-        fastq1_Z3_XS_bam = append_Z3_XS_tag(fastq1_bam, 'Aligned.out.Z3.XS.bam')
+        fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
 
     with cwd(fastq2_dir):
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
-        fastq2_Z3_XS_bam = append_Z3_XS_tag(fastq2_bam, 'Aligned.out.Z3.XS.bam')
+        fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
 
 
 def create_parser():
