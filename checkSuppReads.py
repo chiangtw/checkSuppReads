@@ -330,66 +330,72 @@ def generate_ZS_tag(sam_data):
     return "ZS:f:{}".format(round(similarity, 4))
 
 
+@contextmanager
+def bam_reader(bam_file, samtools_bin='samtools'):
+    cmd = [samtools_bin, 'view', '-h', '-']
+
+    with sp.Popen(cmd, stdout=sp.PIPE, encoding='utf-8') as p:
+        yield iter(p.stdout.readline, '')
+
+
+@contextmanager
+def bam_writer(out_file, samtools_bin='samtools'):
+    cmd = [samtools_bin, 'view', '-bh', '-o', out_file, '-']
+
+    with sp.Popen(cmd, stdin=sp.PIPE, encoding='utf-8') as p:
+        yield p.stdin
+
+
 def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
-    cmd_1 = [samtools_bin, 'view', '-h', bam_file]
-    cmd_2 = [samtools_bin, 'view', '-bh', '-']
+    with bam_reader(bam_file, samtools_bin=samtools_bin) as reader:
+        with bam_writer(out_file, samtools_bin=samtools_bin) as writer:
+            for line in reader:
+                sam_data = SamFormat(line)
 
-    p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
-
-    with open(out_file, 'wb') as bam_out:
-        p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
-
-        for line in iter(p1.stdout.readline, ''):
-            sam_data = SamFormat(line)
-
-            if sam_data.is_header:
-                print(sam_data, file=p2.stdin)
-            else:
-                if sam_data.is_unmapped:
-                    print(sam_data, file=p2.stdin)
+                if sam_data.is_header:
+                    writer.write(sam_data)
                 else:
-                    Z3_tag = generate_Z3_tag(sam_data)
-                    ZS_tag = generate_ZS_tag(sam_data)
-                    print(sam_data, Z3_tag, ZS_tag, sep='\t', file=p2.stdin)
+                    if sam_data.is_unmapped:
+                        writer.write(sam_data)
+                    else:
+                        Z3_tag = generate_Z3_tag(sam_data)
+                        ZS_tag = generate_ZS_tag(sam_data)
+                        writer.write(f'{sam_data}\t{Z3_tag}\t{ZS_tag}')
 
     return os.path.abspath(out_file)
 
 
 def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
-    cmd_1 = [samtools_bin, 'view', '-h', bam_file]
-    cmd_2 = [samtools_bin, 'view', '-bh', '-']
+    with bam_reader(bam_file, samtools_bin=samtools_bin) as reader:
+        with bam_writer(out_file, samtools_bin=samtools_bin) as writer:
 
-    p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
+            qname = None
+            sam_gp = []
 
-    with open(out_file, 'wb') as bam_out:
-        p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
+            for line in reader:
+                sam_data = SamFormat(line)
 
-        qname = None
-        sam_gp = []
-        for line in iter(p1.stdout.readline, ''):
-            sam_data = SamFormat(line)
-
-            if sam_data.is_header:
-                print(sam_data, file=p2.stdin)
-            else:
-                if not qname:
-                    qname = sam_data.qname
-                    sam_gp.append(sam_data)
+                if sam_data.is_header:
+                    writer.write(sam_data)
                 else:
-                    if sam_data.qname == qname:
+                    if qname is None:
+                        qname = sam_data.qname
                         sam_gp.append(sam_data)
                     else:
-                        flags = set(sam.flag for sam in sam_gp)
-                        for flag in flags:
-                            if flag & 2048:
-                                break
+                        if sam_data.qname == qname:
+                            sam_gp.append(sam_data)
                         else:
-                            for sam in sam_gp:
-                                print(sam, file=p2.stdin)
+                            flags = set(sam.flag for sam in sam_gp)
+                            for flag in flags:
+                                if flag & 2048:
+                                    break
+                            else:
+                                for sam in sam_gp:
+                                    writer.write(sam)
 
-                        # init for next group
-                        qname = sam_data.qname
-                        sam_gp = [sam_data]
+                            # init for next group
+                            qname = sam_data.qname
+                            sam_gp = [sam_data]
 
     return os.path.abspath(out_file)
 
