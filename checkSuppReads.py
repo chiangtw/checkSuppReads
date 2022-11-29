@@ -414,12 +414,12 @@ def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_th
                 if not sam_data.is_unmapped:
                     pos = sam_data.pos
                     Z3 = int(sam_data.optional_fields['Z3'].value)
-                    XS = float(sam_data.optional_fields['XS'].value)
+                    ZS = float(sam_data.optional_fields['ZS'].value)
 
                     map_len = Z3 - sam_data.pos + 1
 
                     if (map_len >= map_len_threshold) and \
-                            (XS >= similarity_threshold) and \
+                            (ZS >= similarity_threshold) and \
                             (pos <= ref_len - cross_junc_threshold + 1) and \
                             (Z3 >= ref_len + cross_junc_threshold):
 
@@ -431,7 +431,7 @@ def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_th
                             map_len,
                             sam_data.cigar,
                             sam_data.optional_fields['MD'].value,
-                            XS,
+                            ZS,
                             sep='\t',
                             file=out
                         )
@@ -439,7 +439,7 @@ def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_th
     return os.path.abspath(out_file)
 
 
-def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1):
+def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100):
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
     fastq2 = os.path.abspath(fastq2)
@@ -457,13 +457,13 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.XS.uniq_matches.bam.junc_reads', 100, 10, 20, 0.8)
+        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
 
     with cwd(fastq2_dir):
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.XS.uniq_matches.bam.junc_reads', 100, 10, 20, 0.8)
+        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
 
 
 def create_parser():
@@ -504,4 +504,4 @@ if __name__ == "__main__":
     file_reader = csv.reader(args.file_list, delimiter='\t')
 
     for sample_id, fastq1, fastq2 in file_reader:
-        check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads)
+        check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads, args.dist)
