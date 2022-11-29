@@ -60,6 +60,11 @@ logging.basicConfig(
 )
 
 
+BEDTOOLS_BIN = 'bedtools'
+SAMTOOLS_BIN = 'samtools'
+BWA_BIN = 'bwa'
+
+
 class NCLevent:
     JuncSite = namedtuple('JuncSite', ('chr_', 'pos', 'strand'))
 
@@ -115,7 +120,7 @@ class Bed6:
         return '\t'.join(map(str, self._bed6))
 
 
-def get_fasta(genome_file, bed_file, bedtools_bin='bedtools'):
+def get_fasta(genome_file, bed_file, bedtools_bin=BEDTOOLS_BIN):
     with tp.NamedTemporaryFile(dir='.') as tmp_file:
         cmd = [bedtools_bin, 'getfasta']
         cmd += ['-fi', genome_file]
@@ -131,7 +136,7 @@ def get_fasta(genome_file, bed_file, bedtools_bin='bedtools'):
                 yield name, fa_seq
 
 
-def create_bwa_index(fasta_file, bwa_bin='bwa'):
+def create_bwa_index(fasta_file, bwa_bin=BWA_BIN):
     cmd = [bwa_bin, 'index', fasta_file]
     result = sp.run(cmd)
     return result
@@ -179,7 +184,7 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
     return os.path.join(pseudo_refs_dir, NCL_fasta)
 
 
-def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin='bwa', samtools_bin='samtools'):
+def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin=BWA_BIN, samtools_bin=SAMTOOLS_BIN):
     cmd_1 = [
         bwa_bin, 'mem',
         '-t', str(threads),
@@ -331,7 +336,7 @@ def generate_ZS_tag(sam_data):
 
 
 @contextmanager
-def bam_reader(bam_file, samtools_bin='samtools'):
+def bam_reader(bam_file, samtools_bin=SAMTOOLS_BIN):
     cmd = [samtools_bin, 'view', '-h', bam_file]
 
     with sp.Popen(cmd, stdout=sp.PIPE, encoding='utf-8') as p:
@@ -339,16 +344,16 @@ def bam_reader(bam_file, samtools_bin='samtools'):
 
 
 @contextmanager
-def bam_writer(out_file, samtools_bin='samtools'):
+def bam_writer(out_file, samtools_bin=SAMTOOLS_BIN):
     cmd = [samtools_bin, 'view', '-bh', '-o', out_file, '-']
 
     with sp.Popen(cmd, stdin=sp.PIPE, encoding='utf-8') as p:
         yield p.stdin
 
 
-def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
-    with bam_reader(bam_file, samtools_bin=samtools_bin) as reader:
-        with bam_writer(out_file, samtools_bin=samtools_bin) as writer:
+def append_Z3_ZS_tag(bam_file, out_file):
+    with bam_reader(bam_file) as reader:
+        with bam_writer(out_file) as writer:
             for line in reader:
                 sam_data = SamFormat(line)
 
@@ -365,9 +370,9 @@ def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
     return os.path.abspath(out_file)
 
 
-def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
-    with bam_reader(bam_file, samtools_bin=samtools_bin) as reader:
-        with bam_writer(out_file, samtools_bin=samtools_bin) as writer:
+def get_uniq_matches(bam_file, out_file):
+    with bam_reader(bam_file) as reader:
+        with bam_writer(out_file) as writer:
 
             qname = None
             sam_gp = []
@@ -400,6 +405,40 @@ def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
     return os.path.abspath(out_file)
 
 
+def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_threshold, similarity_threshold):
+    with bam_reader(bam_file) as reader, open(out_file, 'w') as out:
+        for line in reader:
+            sam_data = SamFormat(line)
+
+            if not sam_data.is_header:
+                if not sam_data.is_unmapped:
+                    pos = sam_data.pos
+                    Z3 = int(sam_data.optional_fields['Z3'].value)
+                    XS = float(sam_data.optional_fields['XS'].value)
+
+                    map_len = Z3 - sam_data.pos + 1
+
+                    if (map_len >= map_len_threshold) and \
+                            (XS >= similarity_threshold) and \
+                            (pos <= ref_len - cross_junc_threshold + 1) and \
+                            (Z3 >= ref_len + cross_junc_threshold):
+
+                        print(
+                            sam_data.qname,
+                            sam_data.rname,
+                            sam_data.pos,
+                            Z3,
+                            map_len,
+                            sam_data.cigar,
+                            sam_data.optional_fields['MD'].value,
+                            XS,
+                            sep='\t',
+                            file=out
+                        )
+
+    return os.path.abspath(out_file)
+
+
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1):
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
@@ -418,11 +457,13 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
+        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.XS.uniq_matches.bam.junc_reads', 100, 10, 20, 0.8)
 
     with cwd(fastq2_dir):
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
+        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.XS.uniq_matches.bam.junc_reads', 100, 10, 20, 0.8)
 
 
 def create_parser():
