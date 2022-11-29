@@ -355,6 +355,37 @@ def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
     return os.path.abspath(out_file)
 
 
+def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
+    cmd_1 = [samtools_bin, 'view', '-h', bam_file]
+    cmd_2 = [samtools_bin, 'view', '-bh', '-']
+
+    p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
+
+    with open(out_file, 'wb') as bam_out:
+        p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
+
+        sam_data_reader = map(SamFormat, iter(p1.stdout.readline, ''))
+
+        for qname, sam_gp in groupby(sam_data_reader, key=lambda sam: sam.qname):
+
+            # header
+            if qname is None:
+                for sam_data in sam_gp:
+                    print(sam_data, file=p2.stdin)
+
+            else:
+                sam_gp = list(sam_gp)
+                flags = set(sam_data.flag for sam_data in sam_gp)
+                for flag in flags:
+                    if flag & 2048:
+                        break
+                else:
+                    for sam_data in sam_gp:
+                        print(sam_data, file=p2.stdin)
+
+    return os.path.abspath(out_file)
+
+
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1):
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
@@ -372,10 +403,12 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
     with cwd(fastq1_dir):
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
+        fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.XS.uniq_matches.bam')
 
     with cwd(fastq2_dir):
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
+        fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.XS.uniq_matches.bam')
 
 
 def create_parser():
