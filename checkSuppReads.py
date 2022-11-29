@@ -332,7 +332,7 @@ def generate_ZS_tag(sam_data):
 
 @contextmanager
 def bam_reader(bam_file, samtools_bin='samtools'):
-    cmd = [samtools_bin, 'view', '-h', '-']
+    cmd = [samtools_bin, 'view', '-h', bam_file]
 
     with sp.Popen(cmd, stdout=sp.PIPE, encoding='utf-8') as p:
         yield iter(p.stdout.readline, '')
@@ -353,14 +353,14 @@ def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
                 sam_data = SamFormat(line)
 
                 if sam_data.is_header:
-                    writer.write(sam_data)
+                    print(sam_data, file=writer)
                 else:
                     if sam_data.is_unmapped:
-                        writer.write(sam_data)
+                        print(sam_data, file=writer)
                     else:
                         Z3_tag = generate_Z3_tag(sam_data)
                         ZS_tag = generate_ZS_tag(sam_data)
-                        writer.write(f'{sam_data}\t{Z3_tag}\t{ZS_tag}')
+                        print(sam_data, Z3_tag, ZS_tag, sep='\t', file=writer)
 
     return os.path.abspath(out_file)
 
@@ -376,7 +376,7 @@ def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
                 sam_data = SamFormat(line)
 
                 if sam_data.is_header:
-                    writer.write(sam_data)
+                    print(sam_data, file=writer)
                 else:
                     if qname is None:
                         qname = sam_data.qname
@@ -391,7 +391,7 @@ def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
                                     break
                             else:
                                 for sam in sam_gp:
-                                    writer.write(sam)
+                                    print(sam, file=writer)
 
                             # init for next group
                             qname = sam_data.qname
