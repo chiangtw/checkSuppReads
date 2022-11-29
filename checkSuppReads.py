@@ -334,9 +334,8 @@ def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
     cmd_1 = [samtools_bin, 'view', '-h', bam_file]
     cmd_2 = [samtools_bin, 'view', '-bh', '-']
 
-    p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
-
     with open(out_file, 'wb') as bam_out:
+        p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
         p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
 
         for line in iter(p1.stdout.readline, ''):
@@ -352,6 +351,9 @@ def append_Z3_ZS_tag(bam_file, out_file, samtools_bin='samtools'):
                     ZS_tag = generate_ZS_tag(sam_data)
                     print(sam_data, Z3_tag, ZS_tag, sep='\t', file=p2.stdin)
 
+        p1.wait()
+        p2.wait()
+
     return os.path.abspath(out_file)
 
 
@@ -359,9 +361,8 @@ def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
     cmd_1 = [samtools_bin, 'view', '-h', bam_file]
     cmd_2 = [samtools_bin, 'view', '-bh', '-']
 
-    p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
-
     with open(out_file, 'wb') as bam_out:
+        p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
         p2 = sp.Popen(cmd_2, stdin=sp.PIPE, stdout=bam_out, encoding='utf-8')
 
         qname = None
@@ -390,6 +391,9 @@ def get_uniq_matches(bam_file, out_file, samtools_bin='samtools'):
                         # init for next group
                         qname = sam_data.qname
                         sam_gp = [sam_data]
+
+        p1.wait()
+        p2.wait()
 
     return os.path.abspath(out_file)
 
