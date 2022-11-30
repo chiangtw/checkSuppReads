@@ -184,7 +184,14 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
     return os.path.join(pseudo_refs_dir, NCL_fasta)
 
 
-def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin=BWA_BIN, samtools_bin=SAMTOOLS_BIN):
+def bwa_mapping(index_file,
+                fastq_file,
+                out_file,
+                threads=1,
+                retain_unmapped=False,
+                bwa_bin=BWA_BIN,
+                samtools_bin=SAMTOOLS_BIN):
+
     logging.info(f'bwa mapping for {fastq_file}')
 
     cmd_1 = [
@@ -196,6 +203,9 @@ def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin=BWA_BIN, sa
     ]
 
     cmd_2 = [samtools_bin, 'view', '-bh', '-']
+
+    if not retain_unmapped:
+        cmd_2 += ['-F', '4']
 
     with open(out_file, 'wb') as bam_out:
         p1 = sp.Popen(cmd_1, stdout=sp.PIPE, encoding='utf-8')
