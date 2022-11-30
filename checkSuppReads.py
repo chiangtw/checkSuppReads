@@ -465,7 +465,7 @@ def retain_uniq_read_ref(s1_s2_file, out_file):
     with open(s1_s2_file) as f_in:
         all_data = [line.rstrip('\n').split('\t') for line in f_in]
 
-    all_read_ref_pairs = sorted(set(itemgetter(0, 1) for data in all_data))
+    all_read_ref_pairs = sorted(set((data[0], data[1]) for data in all_data))
 
     with open(out_file, 'w') as out:
         for read_id, read_gp in groupby(all_read_ref_pairs, key=itemgetter(0)):
@@ -538,7 +538,7 @@ def output_summary(all_results, out_dir):
 
                     summary[NCL_id][sample_id] = read_count
 
-        with open(out_file, 'w') as out:
+        with open('summary.txt', 'w') as out:
             all_sample_ids = [sample_id for sample_id, _ in all_results]
             print('NCL_id', *all_sample_ids, sep='\t', file=out)
 
