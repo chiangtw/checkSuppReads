@@ -50,7 +50,7 @@ import logging
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from operator import itemgetter
-from itertools import chain
+from itertools import chain, groupby
 
 
 logging.basicConfig(
@@ -439,12 +439,65 @@ def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_th
     return os.path.abspath(out_file)
 
 
+def merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, out_file):
+    all_junc_reads = []
+
+    with open(fastq1_junc_reads) as f_in:
+        for line in f_in:
+            data = line.rstrip('\n').split('\t')
+            all_junc_reads.append(data + ['1'])
+
+    with open(fastq2_junc_reads) as f_in:
+        for line in f_in:
+            data = line.rstrip('\n').split('\t')
+            all_junc_reads.append(data + ['2'])
+
+    all_junc_reads = sorted(all_junc_reads, key=itemgetter(0, 1, 8))
+
+    with open(out_file, 'w') as out:
+        for data in all_junc_reads:
+            print(*data, sep='\t', file=out)
+
+    return os.path.abspath(out_file)
+
+
+def retain_uniq_read_ref(s1_s2_file, out_file):
+    with open(s1_s2_file) as f_in:
+        all_data = [line.rstrip('\n').split('\t') for line in f_in]
+
+    all_read_ref_pairs = sorted(set(itemgetter(0, 1) for data in all_data))
+
+    with open(out_file, 'w') as out:
+        for read_id, read_gp in groupby(all_read_ref_pairs, key=itemgetter(0)):
+            read_gp = list(read_gp)
+
+            if len(read_gp) == 1:
+                print(*read_gp[0], sep='\t', file=out)
+
+    return os.path.abspath(out_file)
+
+
+def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
+    with open(s1_s2_uniq_file) as f_in:
+        all_data = [line.rstrip('\n').split('\t') for line in f_in]
+
+    all_ref_read_pairs = sorted([(data[1], data[0]) for data in all_data])
+    
+    with open(out_file, 'w') as out:
+        for ref_id, ref_gp in groupby(all_ref_read_pairs, key=itemgetter(0)):
+            ref_gp = list(ref_gp)
+            all_reads = [pair[1] for pair in ref_gp]
+            print(ref_id, len(all_reads), ','.join(all_reads), sep='\t', file=out)
+
+    return os.path.abspath(out_file)
+
+
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100):
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
     fastq2 = os.path.abspath(fastq2)
-    sample_dir = os.path.join(out_dir, sample_id)
 
+    sample_dir = os.path.join(out_dir, sample_id)
     os.makedirs(sample_dir, exist_ok=True)
 
     fastq1_dir = os.path.join(sample_dir, 'fastq1')
@@ -464,6 +517,38 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
         fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
+
+    with cwd(sample_dir):
+        s1_s2_file = merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, 'all_junc_reads_s1_s2.tsv')
+        s1_s2_uniq_file = retain_uniq_read_ref(s1_s2_file, 'all_junc_reads_s1_s2.tsv.uniq_read_ref')
+        read_count_file = merge_all_supporting_reads(s1_s2_uniq_file, 'all_junc_reads.count')
+
+    return read_count_file
+
+
+def output_summary(all_results, out_dir):
+    summary = defaultdict(dict)
+    with cwd(out_dir):
+        for sample_id, result_file in all_results:
+            with open(result_file) as f_in:
+                for line in f_in:
+                    data = line.rstrip('\n').split('\t')
+                    NCL_id = data[0]
+                    read_count = data[1]
+
+                    summary[NCL_id][sample_id] = read_count
+
+        with open(out_file, 'w') as out:
+            all_sample_ids = [sample_id for sample_id, _ in all_results]
+            print('NCL_id', *all_sample_ids, sep='\t', file=out)
+
+            for NCL_id in summary:
+                all_read_count = []
+                for sample_id in all_sample_ids:
+                    read_count = summary[NCL_id].get(sample_id, '0')
+                    all_read_count.append(read_count)
+
+                print(NCL_id, *all_read_count, sep='\t', file=out)
 
 
 def create_parser():
@@ -501,7 +586,10 @@ if __name__ == "__main__":
     if not index_file:
         index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, args.dist)
 
+    all_results = []
     file_reader = csv.reader(args.file_list, delimiter='\t')
-
     for sample_id, fastq1, fastq2 in file_reader:
-        check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads, args.dist)
+        result_file = check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads, args.dist)
+        all_results.append([sample_id, result_file])
+
+    output_summary(all_results, args.out_dir)
