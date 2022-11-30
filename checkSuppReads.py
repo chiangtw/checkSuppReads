@@ -143,7 +143,7 @@ def create_bwa_index(fasta_file, bwa_bin=BWA_BIN):
 
 
 def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
-    logging.info('generating pseudo-references')
+    logging.info('Generating pseudo-references')
     genome_file = os.path.abspath(genome_file)
     out_dir = os.path.abspath(out_dir)
     pseudo_refs_dir = os.path.join(out_dir, 'pseudo_refs')
@@ -185,6 +185,8 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
 
 
 def bwa_mapping(index_file, fastq_file, out_file, threads=1, bwa_bin=BWA_BIN, samtools_bin=SAMTOOLS_BIN):
+    logging.info(f'bwa mapping for {fastq_file}')
+
     cmd_1 = [
         bwa_bin, 'mem',
         '-t', str(threads),
@@ -352,6 +354,7 @@ def bam_writer(out_file, samtools_bin=SAMTOOLS_BIN):
 
 
 def append_Z3_ZS_tag(bam_file, out_file):
+    logging.info(f'appending Z3 & ZS tag to {bam_file}')
     with bam_reader(bam_file) as reader:
         with bam_writer(out_file) as writer:
             for line in reader:
@@ -371,6 +374,7 @@ def append_Z3_ZS_tag(bam_file, out_file):
 
 
 def get_uniq_matches(bam_file, out_file):
+    logging.info('getting unique matches')
     with bam_reader(bam_file) as reader:
         with bam_writer(out_file) as writer:
 
@@ -406,6 +410,7 @@ def get_uniq_matches(bam_file, out_file):
 
 
 def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_threshold, similarity_threshold):
+    logging.info('getting junction reads')
     with bam_reader(bam_file) as reader, open(out_file, 'w') as out:
         for line in reader:
             sam_data = SamFormat(line)
@@ -493,6 +498,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
 
 
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100):
+    logging.info('Checking supporting reads')
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
     fastq2 = os.path.abspath(fastq2)
@@ -507,18 +513,21 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
     os.makedirs(fastq2_dir, exist_ok=True)
 
     with cwd(fastq1_dir):
+        logging.info(f'Checking fastq1 of {sample_id}')
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
         fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
 
     with cwd(fastq2_dir):
+        logging.info(f'Checking fastq2 of {sample_id}')
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
         fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
 
     with cwd(sample_dir):
+        logging.info(f'Merging results for {sample_id}')
         s1_s2_file = merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, 'all_junc_reads_s1_s2.tsv')
         s1_s2_uniq_file = retain_uniq_read_ref(s1_s2_file, 'all_junc_reads_s1_s2.tsv.uniq_read_ref')
         read_count_file = merge_all_supporting_reads(s1_s2_uniq_file, 'all_junc_reads.count')
