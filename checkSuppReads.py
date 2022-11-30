@@ -7,7 +7,6 @@ checkSuppReads.py NCL_events.tsv file_list.tsv out/
 
 NCL_events.tsv:
     (NCL events) 6-columns TSV: (chr_d, pos_d, strand_d, chr_a, pos_a, strand_a)
-    ((circRNA events) 4-columns TSV: (chr, pos1, pos2, strand))
 
 file_list.tsv:
     3-columns TSV: (sample_id, Fastq_1_path, Fastq_2_path)
@@ -508,7 +507,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
 
 
 def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100):
-    logging.info('Checking supporting reads')
+    logging.info(f'Checking supporting reads from {sample_id}')
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
     fastq2 = os.path.abspath(fastq2)
@@ -584,7 +583,7 @@ def create_parser():
               '(sample_id, path_to_fastq_1, path_to_fastq_2)')
     )
     parser.add_argument('out_dir')
-    parser.add_argument('--index')
+    parser.add_argument('--index', help="Path to the pre-build index, e.g. \"./out_dir/pseudo_ref\"")
     parser.add_argument('-g', '--genome')
     parser.add_argument('-d', '--dist', type=int, default=100)
     parser.add_argument('-t', '--threads', type=int, default=1)
@@ -601,8 +600,10 @@ if __name__ == "__main__":
     ncl_reader = csv.reader(args.NCL_events, delimiter='\t')
     NCL_events = [NCLevent(data) for data in ncl_reader]
 
-    index_file = args.index
-    if not index_file:
+    index_dir = args.index
+    if index_dir:
+        index_file = os.path.join(index_dir, 'NCL_events.near_junction_region.fa')
+    else:
         index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, args.dist)
 
     all_results = []
