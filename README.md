@@ -20,3 +20,10 @@ optional arguments:
 
 ```
 
+
+## Requirements
+
+- python==3
+- bedtools
+- samtools
+- bwa
