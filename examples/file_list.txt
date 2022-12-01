@@ -1,0 +1,1 @@
+simu	datasets/simu_5X_100PE_1.fastq	datasets/simu_5X_100PE_2.fastq
