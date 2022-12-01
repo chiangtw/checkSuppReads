@@ -572,7 +572,10 @@ def output_summary(all_results, out_dir):
 
 
 def create_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Checking if there are junction supporting reads for the NCL junction.'
+    )
     parser.add_argument(
         'NCL_events',
         type=argparse.FileType('r'),
@@ -585,10 +588,10 @@ def create_parser():
               '(sample_id, path_to_fastq_1, path_to_fastq_2)')
     )
     parser.add_argument('out_dir')
-    parser.add_argument('--index', help="Path to the pre-build index, e.g. \"./out_dir/pseudo_ref\"")
+    parser.add_argument('--index', help='Path to the pre-build index, e.g. "./out_dir/pseudo_ref"')
     parser.add_argument('-g', '--genome')
-    parser.add_argument('-d', '--dist', type=int, default=100)
-    parser.add_argument('-t', '--threads', type=int, default=1)
+    parser.add_argument('-d', '--dist', type=int, default=100, help='The extended distance from NCL junction to upstream/downstream.')
+    parser.add_argument('-t', '--threads', type=int, default=1, help=' ')
 
     return parser
 
