@@ -132,6 +132,8 @@ def get_fasta(genome_file, bed_file, bedtools_bin=BEDTOOLS_BIN):
         with open(tmp_file.name) as fa_in:
             for line in fa_in:
                 name, fa_seq = line.rstrip('\n').split('\t')
+                name = re.sub(r'\([+-]\)$', '', name)
+                name = re.sub(r'::.*$', '', name)
                 yield name, fa_seq
 
 
