@@ -546,7 +546,7 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
     return read_count_file
 
 
-def output_summary(all_results, out_dir):
+def output_summary(NCL_events, all_results, out_dir):
     summary = defaultdict(dict)
     with cwd(out_dir):
         for sample_id, result_file in all_results:
@@ -562,7 +562,8 @@ def output_summary(all_results, out_dir):
             all_sample_ids = [sample_id for sample_id, _ in all_results]
             print('NCL_id', *all_sample_ids, sep='\t', file=out)
 
-            for NCL_id in summary:
+            for ncl_ev in NCL_events:
+                NCL_id = ncl_ev.id
                 all_read_count = []
                 for sample_id in all_sample_ids:
                     read_count = summary[NCL_id].get(sample_id, '0')
@@ -617,4 +618,4 @@ if __name__ == "__main__":
         result_file = check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads, args.dist)
         all_results.append([sample_id, result_file])
 
-    output_summary(all_results, args.out_dir)
+    output_summary(NCL_events, all_results, args.out_dir)
