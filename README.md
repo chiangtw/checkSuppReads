@@ -19,7 +19,7 @@ optional arguments:
                         (default: 1)
 
 ```
-
+See [examples](examples).
 
 ## Requirements
 
