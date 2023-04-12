@@ -508,7 +508,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
     return os.path.abspath(out_file)
 
 
-def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100):
+def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100, cross_len=10, map_len=20, similarity=0.8):
     logging.info(f'Checking supporting reads from {sample_id}')
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
@@ -528,14 +528,14 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
+        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, cross_len, map_len, similarity)
 
     with cwd(fastq2_dir):
         logging.info(f'Checking fastq2 of {sample_id}')
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, 10, 20, 0.8)
+        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, cross_len, map_len, similarity)
 
     with cwd(sample_dir):
         logging.info(f'Merging results for {sample_id}')
@@ -592,6 +592,9 @@ def create_parser():
     parser.add_argument('--index', help='Path to the pre-build index, e.g. "./out_dir/pseudo_ref"')
     parser.add_argument('-g', '--genome')
     parser.add_argument('-d', '--dist', type=int, default=100, help='The extended distance from NCL junction to upstream/downstream.')
+    parser.add_argument('-l', '--cross_len', type=int, default=10, help='The minimal length of bases across the NCL junction.')
+    parser.add_argument('-m', '--map_len', type=int, default=20)
+    parser.add_argument('-s', '--similarity', type=float, default=0.8)
     parser.add_argument('-t', '--threads', type=int, default=1, help=' ')
 
     return parser
@@ -615,7 +618,18 @@ if __name__ == "__main__":
     all_results = []
     file_reader = csv.reader(args.file_list, delimiter='\t')
     for sample_id, fastq1, fastq2 in file_reader:
-        result_file = check_supporting_reads(index_file, sample_id, fastq1, fastq2, args.out_dir, args.threads, args.dist)
+        result_file = check_supporting_reads(
+            index_file,
+            sample_id,
+            fastq1,
+            fastq2,
+            args.out_dir,
+            args.threads,
+            args.dist,
+            args.cross_len,
+            args.map_len,
+            args.similarity
+        )
         all_results.append([sample_id, result_file])
 
     output_summary(NCL_events, all_results, args.out_dir)
