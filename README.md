@@ -1,7 +1,7 @@
 ## Usage
 
 ```
-usage: checkSuppReads.py [-h] [--index INDEX] [-g GENOME] [-d DIST] [-t THREADS] NCL_events file_list out_dir
+usage: checkSuppReads.py [-h] [--index INDEX] [-g GENOME] [-d DIST] [-l CROSS_LEN] [-m MAP_LEN] [-s SIMILARITY] [-t THREADS] NCL_events file_list out_dir
 
 Checking if there are junction supporting reads for the NCL junction.
 
@@ -15,8 +15,14 @@ optional arguments:
   --index INDEX         Path to the pre-build index, e.g. "./out_dir/pseudo_ref" (default: None)
   -g GENOME, --genome GENOME
   -d DIST, --dist DIST  The extended distance from NCL junction to upstream/downstream. (default: 100)
+  -l CROSS_LEN, --cross_len CROSS_LEN
+                        The minimal length of bases across the NCL junction. (default: 10)
+  -m MAP_LEN, --map_len MAP_LEN
+                        . (default: 20)
+  -s SIMILARITY, --similarity SIMILARITY
+                        . (default: 0.8)
   -t THREADS, --threads THREADS
-                        (default: 1)
+                        . (default: 1)
 
 ```
 See [examples](examples).

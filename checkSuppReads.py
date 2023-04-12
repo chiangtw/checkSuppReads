@@ -593,9 +593,9 @@ def create_parser():
     parser.add_argument('-g', '--genome')
     parser.add_argument('-d', '--dist', type=int, default=100, help='The extended distance from NCL junction to upstream/downstream.')
     parser.add_argument('-l', '--cross_len', type=int, default=10, help='The minimal length of bases across the NCL junction.')
-    parser.add_argument('-m', '--map_len', type=int, default=20)
-    parser.add_argument('-s', '--similarity', type=float, default=0.8)
-    parser.add_argument('-t', '--threads', type=int, default=1, help=' ')
+    parser.add_argument('-m', '--map_len', type=int, default=20, help='.')
+    parser.add_argument('-s', '--similarity', type=float, default=0.8, help='.')
+    parser.add_argument('-t', '--threads', type=int, default=1, help='.')
 
     return parser
 
