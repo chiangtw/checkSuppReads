@@ -23,7 +23,7 @@ out
 # Dependency
 
  - python==3
- - bedtools==2.29.0
+ - bedtools
  - samtools
  - bwa
 
@@ -95,6 +95,29 @@ class NCLevent:
         return acceptor_region
 
 
+class PseudoRefDistDB:
+    def __init__(self, dist=100, dist_file=None):
+        self._dist = dist
+        self._dist_file = dist_file
+
+        self._dist_db = {}
+
+        if self._dist_file:
+            self._parse_dist_file(self._dist_file)
+
+    def _parse_dist_file(self, dist_file):
+        with open(dist_file) as f_in:
+            for line in f_in:
+                id_, dist_d, dist_a = line.rstrip('\n').split('\t')
+                dist_d = int(dist_d)
+                dist_a = int(dist_a)
+
+                self._dist_db[id_] = (dist_d, dist_a)
+
+    def get(self, id_):
+        return self._dist_db.get(id_, (dist, dist))
+
+
 @contextmanager
 def cwd(path):
     origin_pwd = os.getcwd()
@@ -143,7 +166,7 @@ def create_bwa_index(fasta_file, bwa_bin=BWA_BIN):
     return result
 
 
-def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
+def generate_pseudo_references(NCL_events, genome_file, out_dir, dist_db):
     logging.info('Generating pseudo-references')
     genome_file = os.path.abspath(genome_file)
     out_dir = os.path.abspath(out_dir)
@@ -151,18 +174,23 @@ def generate_pseudo_references(NCL_events, genome_file, out_dir, dist=100):
     os.makedirs(pseudo_refs_dir, exist_ok=True)
 
     NCL_file = 'NCL_events.tsv'
+    NCL_dist = 'NCL_events.dist.tsv'
     NCL_bed = 'NCL_events.near_junction_region.bed'
     NCL_fasta = 'NCL_events.near_junction_region.fa'
 
     with cwd(pseudo_refs_dir):
         with open(NCL_file, 'w') as ncl_out, \
+                open(NCL_dist, 'w') as ncl_dist, \
                 open(NCL_bed, 'w') as bed_out:
 
             for ncl_ev in NCL_events:
                 print(*ncl_ev.donor, *ncl_ev.acceptor, sep='\t', file=ncl_out)
 
-                donor_region = ncl_ev.get_donor_region(dist)
-                acceptor_region = ncl_ev.get_acceptor_region(dist)
+                dist_d, dist_a = dist_db.get(ncl_ev.id)
+                print(ncl_ev.id, dist_d, dist_a, sep='\t', file=ncl_dist)
+
+                donor_region = ncl_ev.get_donor_region(dist_d)
+                acceptor_region = ncl_ev.get_acceptor_region(dist_a)
 
                 donor_bed6 = Bed6(donor_region, f'{ncl_ev.id}_1')
                 acceptor_bed6 = Bed6(acceptor_region, f'{ncl_ev.id}_2')
@@ -420,7 +448,7 @@ def get_uniq_matches(bam_file, out_file):
     return os.path.abspath(out_file)
 
 
-def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_threshold, similarity_threshold):
+def get_junc_reads(bam_file, out_file, dist_db, cross_junc_threshold, map_len_threshold, similarity_threshold):
     logging.info('getting junction reads')
     with bam_reader(bam_file) as reader, open(out_file, 'w') as out:
         for line in reader:
@@ -432,12 +460,15 @@ def get_junc_reads(bam_file, out_file, ref_len, cross_junc_threshold, map_len_th
                     Z3 = int(sam_data.optional_fields['Z3'].value)
                     ZS = float(sam_data.optional_fields['ZS'].value)
 
+                    ref_name = sam_data.rname
+                    ref_len_d, _ = dist_db.get(ref_name)
+
                     map_len = Z3 - sam_data.pos + 1
 
                     if (map_len >= map_len_threshold) and \
                             (ZS >= similarity_threshold) and \
-                            (pos <= ref_len - cross_junc_threshold + 1) and \
-                            (Z3 >= ref_len + cross_junc_threshold):
+                            (pos <= ref_len_d - cross_junc_threshold + 1) and \
+                            (Z3 >= ref_len_d + cross_junc_threshold):
 
                         print(
                             sam_data.qname,
@@ -508,7 +539,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
     return os.path.abspath(out_file)
 
 
-def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threads=1, dist=100, cross_len=10, map_len=20, similarity=0.8):
+def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_db, threads=1, cross_len=10, map_len=20, similarity=0.8):
     logging.info(f'Checking supporting reads from {sample_id}')
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
@@ -528,14 +559,14 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, threa
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, cross_len, map_len, similarity)
+        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
 
     with cwd(fastq2_dir):
         logging.info(f'Checking fastq2 of {sample_id}')
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist, cross_len, map_len, similarity)
+        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
 
     with cwd(sample_dir):
         logging.info(f'Merging results for {sample_id}')
@@ -592,6 +623,7 @@ def create_parser():
     parser.add_argument('--index', help='Path to the pre-build index, e.g. "./out_dir/pseudo_ref"')
     parser.add_argument('-g', '--genome')
     parser.add_argument('-d', '--dist', type=int, default=100, help='The extended distance from NCL junction to upstream/downstream.')
+    parser.add_argument('-D', '--dist_file', help='The file of the extended distances.')
     parser.add_argument('-l', '--cross_len', type=int, default=10, help='The minimal length of bases across the NCL junction.')
     parser.add_argument('-m', '--map_len', type=int, default=20, help='.')
     parser.add_argument('-s', '--similarity', type=float, default=0.8, help='.')
@@ -611,9 +643,11 @@ if __name__ == "__main__":
 
     index_dir = args.index
     if index_dir:
+        dist_db = os.path.join(index_dir, 'NCL_events.dist.tsv')
         index_file = os.path.join(index_dir, 'NCL_events.near_junction_region.fa')
     else:
-        index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, args.dist)
+        dist_db = PseudoRefDistDB(args.dist, args.dist_file)
+        index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, dist_db)
 
     all_results = []
     file_reader = csv.reader(args.file_list, delimiter='\t')
@@ -624,8 +658,8 @@ if __name__ == "__main__":
             fastq1,
             fastq2,
             args.out_dir,
+            dist_db,
             args.threads,
-            args.dist,
             args.cross_len,
             args.map_len,
             args.similarity
