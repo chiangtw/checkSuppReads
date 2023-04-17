@@ -115,7 +115,7 @@ class PseudoRefDistDB:
                 self._dist_db[id_] = (dist_d, dist_a)
 
     def get(self, id_):
-        return self._dist_db.get(id_, (dist, dist))
+        return self._dist_db.get(id_, (self._dist, self._dist))
 
 
 @contextmanager
