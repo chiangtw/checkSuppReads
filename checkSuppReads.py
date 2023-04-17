@@ -643,7 +643,7 @@ if __name__ == "__main__":
 
     index_dir = args.index
     if index_dir:
-        dist_db = os.path.join(index_dir, 'NCL_events.dist.tsv')
+        dist_db = PseudoRefDistDB(dist_file=os.path.join(index_dir, 'NCL_events.dist.tsv'))
         index_file = os.path.join(index_dir, 'NCL_events.near_junction_region.fa')
     else:
         dist_db = PseudoRefDistDB(args.dist, args.dist_file)
