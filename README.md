@@ -32,6 +32,15 @@ optional arguments:
 
 The DIST_FILE is consist of three columns: (NCL_id, dist_donor, dist_acceptor).
 
+eg.
+```
+chr9|137145902|+|chr9|136362180|-    100  100
+chr5|149845914|+|chr5|149832656|+    100  100
+chr10|133381659|+|chr10|133379999|+  100  100
+chrX|107088436|-|chrX|107115556|-    100  100
+chr1|28476291|+|chr1|28466382|+      100  100
+```
+
 See [examples](examples).
 
 ## Requirements
