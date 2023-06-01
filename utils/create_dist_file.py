@@ -16,25 +16,48 @@ class NCLevent:
         self.acceptor = self.JuncSite(NCL_data[3], int(NCL_data[4]), NCL_data[5])
 
         self.id = "|".join(NCL_data[:6])
+        self.donor_id = "|".join([NCL_data[0], NCL_data[1], NCL_data[2]])
+        self.acceptor_id = "|".join([NCL_data[3], NCL_data[4], NCL_data[5]])
 
 
-def get_dist(ncl_ev, default_dist, anno_db):
-    donor = anno_db.get_donor_site(*ncl_ev.donor)
-    acceptor = anno_db.get_acceptor_site(*ncl_ev.acceptor)
+class DistDB:
+    def __init__(self, default_dist, anno_db):
+        self.default_dist = default_dist
+        self._anno_db = anno_db
 
-    if donor:
-        donor_exon_len = max([len(exon) for exon in donor.exons])
-        donor_dist = min(donor_exon_len, default_dist)
-    else:
-        donor_dist = default_dist
+        self._history = {
+            'donor': {},
+            'acceptor': {}
+        }
 
-    if acceptor:
-        acceptor_exon_len = max([len(exon) for exon in acceptor.exons])
-        acceptor_dist = min(acceptor_exon_len, default_dist)
-    else:
-        acceptor_dist = default_dist
+    def get_dist(self, ncl_ev):
+        if ncl_ev.donor_id in self._history['donor']:
+            donor_dist = self._history['donor'][ncl_ev.donor_id]
+        else:
+            donor = anno_db.get_donor_site(*ncl_ev.donor)
 
-    return (donor_dist, acceptor_dist)
+            if donor:
+                donor_exon_len = max([len(exon) for exon in donor.exons])
+                donor_dist = min(donor_exon_len, self.default_dist)
+            else:
+                donor_dist = self.default_dist
+
+            self._history['donor'][ncl_ev.donor_id] = donor_dist
+
+        if ncl_ev.acceptor_id in self._history['acceptor']:
+            acceptor_dist = self._history['acceptor'][ncl_ev.acceptor_id]
+        else:
+            acceptor = anno_db.get_acceptor_site(*ncl_ev.acceptor)
+
+            if acceptor:
+                acceptor_exon_len = max([len(exon) for exon in acceptor.exons])
+                acceptor_dist = min(acceptor_exon_len, self.default_dist)
+            else:
+                acceptor_dist = self.default_dist
+
+            self._history['acceptor'][ncl_ev.acceptor_id] = acceptor_dist
+
+        return (donor_dist, acceptor_dist)
 
 
 def create_parser():
@@ -56,10 +79,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     anno_db = Annotation(args.anno_db)
+    dist_db = DistDB(args.dist, anno_db)
 
     ncl_reader = csv.reader(args.NCL_events, delimiter='\t')
     NCL_events = [NCLevent(data) for data in ncl_reader]
 
     for ncl_ev in NCL_events:
-        donor_dist, acceptor_dist = get_dist(ncl_ev, args.dist, anno_db)
+        donor_dist, acceptor_dist = dist_db.get_dist(ncl_ev)
         print(ncl_ev.id, donor_dist, acceptor_dist, sep='\t', flush=True)
