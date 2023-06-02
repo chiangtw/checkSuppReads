@@ -21,8 +21,11 @@ class NCLevent:
 
 
 class DistDB:
-    def __init__(self, default_dist, anno_db):
+    def __init__(self, default_dist, min_dist, anno_db):
+        assert default_dist >= min_dist
+
         self.default_dist = default_dist
+        self.min_dist = min_dist
         self._anno_db = anno_db
 
         self._history = {
@@ -39,6 +42,7 @@ class DistDB:
             if donor:
                 donor_exon_len = max([len(exon) for exon in donor.exons])
                 donor_dist = min(donor_exon_len, self.default_dist)
+                donor_dist = max(donor_dist, self.min_dist)
             else:
                 donor_dist = self.default_dist
 
@@ -52,6 +56,7 @@ class DistDB:
             if acceptor:
                 acceptor_exon_len = max([len(exon) for exon in acceptor.exons])
                 acceptor_dist = min(acceptor_exon_len, self.default_dist)
+                acceptor_dist = max(acceptor_dist, self.min_dist)
             else:
                 acceptor_dist = self.default_dist
 
@@ -70,6 +75,7 @@ def create_parser():
     )
     parser.add_argument('-d', '--dist', type=int, default=100,
         help='The default distance from NCL junction to upstream/downstream.')
+    parser.add_argument('-m', '--min_dist', type=int, default=10)
 
     return parser
 
@@ -79,7 +85,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     anno_db = Annotation(args.anno_db)
-    dist_db = DistDB(args.dist, anno_db)
+    dist_db = DistDB(args.dist, args.min_dist, anno_db)
 
     ncl_reader = csv.reader(args.NCL_events, delimiter='\t')
     NCL_events = [NCLevent(data) for data in ncl_reader]
