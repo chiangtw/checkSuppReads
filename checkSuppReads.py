@@ -603,6 +603,17 @@ def output_summary(NCL_events, all_results, out_dir):
                 print(NCL_id, *all_read_count, sep='\t', file=out)
 
 
+def ignore_blank_lines(file_):
+    blank_line_pattern = re.compile(r'^\s+$')
+
+    for line in file_:
+        m = re.match(blank_line_pattern, line)
+        if m:
+            pass
+        else:
+            yield line
+
+
 def create_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -650,7 +661,10 @@ if __name__ == "__main__":
         index_file = generate_pseudo_references(NCL_events, args.genome, args.out_dir, dist_db)
 
     all_results = []
-    file_reader = csv.reader(args.file_list, delimiter='\t')
+    file_reader = csv.reader(
+        ignore_blank_lines(args.file_list),
+        delimiter='\t'
+    )
     for sample_id, fastq1, fastq2 in file_reader:
         result_file = check_supporting_reads(
             index_file,
