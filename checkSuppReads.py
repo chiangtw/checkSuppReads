@@ -219,6 +219,7 @@ def bwa_mapping(index_file,
                 threads=1,
                 retain_unmapped=False,
                 bwa_bin=BWA_BIN,
+                bwa_options=None,
                 samtools_bin=SAMTOOLS_BIN):
 
     logging.info(f'bwa mapping for {fastq_file}')
@@ -230,6 +231,8 @@ def bwa_mapping(index_file,
         index_file,
         fastq_file
     ]
+    if bwa_options:
+        cmd_1 += bwa_options
 
     cmd_2 = [samtools_bin, 'view', '-bh', '-']
 
@@ -539,7 +542,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
     return os.path.abspath(out_file)
 
 
-def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_db, threads=1, cross_len=10, map_len=20, similarity=0.8):
+def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_db, threads=1, AS_threshold=30, cross_len=10, map_len=20, similarity=0.8):
     logging.info(f'Checking supporting reads from {sample_id}')
     index_file = os.path.abspath(index_file)
     fastq1 = os.path.abspath(fastq1)
@@ -556,14 +559,14 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_
 
     with cwd(fastq1_dir):
         logging.info(f'Checking fastq1 of {sample_id}')
-        fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads)
+        fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads, bwa_options=['-T', str(AS_threshold)])
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
         fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
 
     with cwd(fastq2_dir):
         logging.info(f'Checking fastq2 of {sample_id}')
-        fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads)
+        fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads, bwa_options=['-T', str(AS_threshold)])
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
         fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
@@ -638,6 +641,7 @@ def create_parser():
     parser.add_argument('-l', '--cross_len', type=int, default=10, help='The minimal length of bases across the NCL junction.')
     parser.add_argument('-m', '--map_len', type=int, default=20, help='.')
     parser.add_argument('-s', '--similarity', type=float, default=0.8, help='.')
+    parser.add_argument('-T', '--AS_threshold', type=int, default=30, help='.')
     parser.add_argument('-t', '--threads', type=int, default=1, help='.')
 
     return parser
@@ -674,6 +678,7 @@ if __name__ == "__main__":
             args.out_dir,
             dist_db,
             args.threads,
+            args.AS_threshold,
             args.cross_len,
             args.map_len,
             args.similarity
