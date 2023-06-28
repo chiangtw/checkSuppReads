@@ -594,7 +594,7 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_
     with cwd(sample_dir):
         logging.info(f'Merging results for {sample_id}')
         s1_s2_file = merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, 'all_junc_reads_s1_s2.tsv')
-        s1_s2_filtered_file = filter_junction_reads(s1_s2_file, 'all_junc_reads_s1_s2.filtered.tsv', cross_len, map_len, similarity)
+        s1_s2_filtered_file = filter_junction_reads(s1_s2_file, 'all_junc_reads_s1_s2.filtered.tsv', dist_db, cross_len, map_len, similarity)
         s1_s2_uniq_file = retain_uniq_read_ref(s1_s2_filtered_file, 'all_junc_reads_s1_s2.tsv.uniq_read_ref')
         read_count_file = merge_all_supporting_reads(s1_s2_uniq_file, 'all_junc_reads.count')
 
