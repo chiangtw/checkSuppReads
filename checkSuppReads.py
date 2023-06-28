@@ -451,7 +451,7 @@ def get_uniq_matches(bam_file, out_file):
     return os.path.abspath(out_file)
 
 
-def get_junc_reads(bam_file, out_file, dist_db, cross_junc_threshold, map_len_threshold, similarity_threshold):
+def get_junc_reads(bam_file, out_file, dist_db):
     logging.info('getting junction reads')
     with bam_reader(bam_file) as reader, open(out_file, 'w') as out:
         for line in reader:
@@ -468,10 +468,7 @@ def get_junc_reads(bam_file, out_file, dist_db, cross_junc_threshold, map_len_th
 
                     map_len = Z3 - sam_data.pos + 1
 
-                    if (map_len >= map_len_threshold) and \
-                            (ZS >= similarity_threshold) and \
-                            (pos <= ref_len_d - cross_junc_threshold + 1) and \
-                            (Z3 >= ref_len_d + cross_junc_threshold):
+                    if (pos <= ref_len_d + 1) and (Z3 >= ref_len_d):
 
                         print(
                             sam_data.qname,
@@ -507,6 +504,29 @@ def merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, out_file):
     with open(out_file, 'w') as out:
         for data in all_junc_reads:
             print(*data, sep='\t', file=out)
+
+    return os.path.abspath(out_file)
+
+
+def filter_junction_reads(junc_reads_file, out_file, dist_db, cross_junc_threshold, map_len_threshold, similarity_threshold):
+    with open(junc_reads_file) as f_in, open(out_file, 'w') as out:
+        for line in f_in:
+            data = line.rstrip('\n').split('\t')
+
+            ref_name = data[1]
+            pos = int(data[2])
+            Z3 = int(data[3])
+            map_len = int(data[4])
+            ZS = float(data[7])
+
+            ref_len_d, _ = dist_db.get(ref_name)
+
+            if (map_len >= map_len_threshold) and \
+                    (ZS >= similarity_threshold) and \
+                    (pos <= ref_len_d - cross_junc_threshold + 1) and \
+                    (Z3 >= ref_len_d + cross_junc_threshold):
+
+                print(*data, sep='\t', file=out)
 
     return os.path.abspath(out_file)
 
@@ -562,19 +582,20 @@ def check_supporting_reads(index_file, sample_id, fastq1, fastq2, out_dir, dist_
         fastq1_bam = bwa_mapping(index_file, fastq1, 'Aligned.out.bam', threads, bwa_options=['-T', str(AS_threshold)])
         fastq1_Z3_ZS_bam = append_Z3_ZS_tag(fastq1_bam, 'Aligned.out.Z3.ZS.bam')
         fastq1_uniq_bam = get_uniq_matches(fastq1_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
+        fastq1_junc_reads = get_junc_reads(fastq1_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db)
 
     with cwd(fastq2_dir):
         logging.info(f'Checking fastq2 of {sample_id}')
         fastq2_bam = bwa_mapping(index_file, fastq2, 'Aligned.out.bam', threads, bwa_options=['-T', str(AS_threshold)])
         fastq2_Z3_ZS_bam = append_Z3_ZS_tag(fastq2_bam, 'Aligned.out.Z3.ZS.bam')
         fastq2_uniq_bam = get_uniq_matches(fastq2_Z3_ZS_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam')
-        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db, cross_len, map_len, similarity)
+        fastq2_junc_reads = get_junc_reads(fastq2_uniq_bam, 'Aligned.out.Z3.ZS.uniq_matches.bam.junc_reads', dist_db)
 
     with cwd(sample_dir):
         logging.info(f'Merging results for {sample_id}')
         s1_s2_file = merge_junction_reads(fastq1_junc_reads, fastq2_junc_reads, 'all_junc_reads_s1_s2.tsv')
-        s1_s2_uniq_file = retain_uniq_read_ref(s1_s2_file, 'all_junc_reads_s1_s2.tsv.uniq_read_ref')
+        s1_s2_filtered_file = filter_junction_reads(s1_s2_file, 'all_junc_reads_s1_s2.filtered.tsv', cross_len, map_len, similarity)
+        s1_s2_uniq_file = retain_uniq_read_ref(s1_s2_filtered_file, 'all_junc_reads_s1_s2.tsv.uniq_read_ref')
         read_count_file = merge_all_supporting_reads(s1_s2_uniq_file, 'all_junc_reads.count')
 
     return read_count_file
