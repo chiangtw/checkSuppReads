@@ -24,6 +24,29 @@ def cwd(path):
     os.chdir(origin_pwd)
 
 
+class PseudoRefDistDB:
+    def __init__(self, dist=100, dist_file=None):
+        self._dist = dist
+        self._dist_file = dist_file
+
+        self._dist_db = {}
+
+        if self._dist_file:
+            self._parse_dist_file(self._dist_file)
+
+    def _parse_dist_file(self, dist_file):
+        with open(dist_file) as f_in:
+            for line in f_in:
+                id_, dist_d, dist_a = line.rstrip('\n').split('\t')
+                dist_d = int(dist_d)
+                dist_a = int(dist_a)
+
+                self._dist_db[id_] = (dist_d, dist_a)
+
+    def get(self, id_):
+        return self._dist_db.get(id_, (self._dist, self._dist))
+
+
 def filter_junction_reads(junc_reads_file, out_file, dist_db, cross_junc_threshold, map_len_threshold, similarity_threshold):
     with open(junc_reads_file) as f_in, open(out_file, 'w') as out:
         for line in f_in:
@@ -78,7 +101,7 @@ def merge_all_supporting_reads(s1_s2_uniq_file, out_file):
     return os.path.abspath(out_file)
 
 
-def modify_conditions(results_dir, sample_id, cross_len, map_len, similarity):
+def modify_conditions(results_dir, sample_id, dist_db, cross_len, map_len, similarity):
     sample_dir = os.path.join(results_dir, sample_id)
 
     with cwd(sample_dir):
@@ -96,6 +119,7 @@ def create_parser():
               '(sample_id, path_to_fastq_1, path_to_fastq_2)')
     )
     parser.add_argument('results_dir', help='The results directory from "checkSuppReads.py".')
+    parser.add_argument('index_dir', help='Path to the pre-build index, e.g. "./out_dir/pseudo_ref"')
     parser.add_argument('-l', '--cross_len', type=int, default=10, help='The minimal length of bases across the NCL junction.')
     parser.add_argument('-m', '--map_len', type=int, default=20, help='.')
     parser.add_argument('-s', '--similarity', type=float, default=0.8, help='.')
@@ -107,7 +131,9 @@ if __name__ == "__main__":
     parser = create_parser()
     args = parser.parse_args()
 
+    dist_db = PseudoRefDistDB(dist_file=os.path.join(args.index_dir, 'NCL_events.dist.tsv'))
+
     sample_ids = get_sample_ids(args.file_list)
 
     for sample_id in sample_ids:
-        modify_conditions(args.results_dir, sample_id, args.cross_len, args.map_len, args.similarity)
+        modify_conditions(args.results_dir, sample_id, dist_db, args.cross_len, args.map_len, args.similarity)
