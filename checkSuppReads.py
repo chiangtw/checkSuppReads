@@ -609,22 +609,22 @@ def output_summary(NCL_events, all_results, out_dir):
                 for line in f_in:
                     data = line.rstrip('\n').split('\t')
                     NCL_id = data[0]
-                    read_count = data[1]
+                    read_count = int(data[1])
 
                     summary[NCL_id][sample_id] = read_count
 
         with open('summary.txt', 'w') as out:
             all_sample_ids = [sample_id for sample_id, _ in all_results]
-            print('NCL_id', *all_sample_ids, sep='\t', file=out)
+            print('NCL_id', 'total_read_count', *all_sample_ids, sep='\t', file=out)
 
             for ncl_ev in NCL_events:
                 NCL_id = ncl_ev.id
                 all_read_count = []
                 for sample_id in all_sample_ids:
-                    read_count = summary[NCL_id].get(sample_id, '0')
+                    read_count = summary[NCL_id].get(sample_id, 0)
                     all_read_count.append(read_count)
 
-                print(NCL_id, *all_read_count, sep='\t', file=out)
+                print(NCL_id, sum(all_read_count), *all_read_count, sep='\t', file=out)
 
 
 def ignore_blank_lines(file_):

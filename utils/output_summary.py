@@ -37,7 +37,7 @@ def get_all_results(sample_ids, results_dir):
             for line in f_in:
                 data = line.rstrip('\n').split('\t')
                 NCL_id = data[0]
-                read_count = data[1]
+                read_count = int(data[1])
 
                 all_results[NCL_id][sample_id] = read_count
 
@@ -45,15 +45,15 @@ def get_all_results(sample_ids, results_dir):
 
 
 def output_summary(NCL_ids, sample_ids, all_results, out_file):
-    print('NCL_id', *sample_ids, sep='\t', file=out_file)
+    print('NCL_id', 'total_read_count', *sample_ids, sep='\t', file=out_file)
 
     for ncl_id in NCL_ids:
         all_read_count = []
         for sample_id in sample_ids:
-            read_count = all_results[ncl_id].get(sample_id, '0')
+            read_count = all_results[ncl_id].get(sample_id, 0)
             all_read_count.append(read_count)
 
-        print(ncl_id, *all_read_count, sep='\t', file=out_file)
+        print(ncl_id, sum(all_read_count), *all_read_count, sep='\t', file=out_file)
 
 
 def create_parser():
